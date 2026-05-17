@@ -1,465 +1,195 @@
-"""
-Telco Customer Churn Prediction App
-Developed by TS Academy Group 9
-"""
-import os
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib  # Changed from pickle
-import plotly.graph_objects as go
-import plotly.express as px
-from datetime import datetime
+import joblib
+import os
+from sklearn.preprocessing import LabelEncoder
 
-# Page configuration
+# Page config
 st.set_page_config(
     page_title="Telco Churn Predictor",
-    page_icon="📱",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_icon="📊",
+    layout="wide"
 )
 
-# Custom CSS for better styling
-st.markdown("""
-    <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        text-align: center;
-        padding: 1rem 0;
-    }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 0.5rem 0;
-    }
-    .stAlert {
-        margin-top: 1rem;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# Load model and preprocessing pipeline
 @st.cache_resource
-
-def load_model():
-    """Load the trained models with proper error handling"""
+def load_models():
+    """Load all models and metadata"""
     try:
-        # Get the correct path - models are in /model folder at root level
-        # app.py is in /telco-churn-app folder
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)
-        model_dir = os.path.join(parent_dir, 'model')
-        
-        logistic_path = os.path.join(model_dir, 'logistic_model.pkl')
-        rf_path = os.path.join(model_dir, 'rf_model.pkl')
-        
-        # Load models using joblib
-        lr_model = joblib.load(logistic_path)
-        rf_model = joblib.load(rf_path)
-        
-        return lr_model, rf_model
-    
-    except FileNotFoundError as e:
-        st.error(f"⚠️ Model files not found: {e}")
-        st.info("Please ensure models are in the correct directory structure.")
-        return None, None
-    
+        lr_model = joblib.load('logistic_model.pkl')
+        rf_model = joblib.load('rf_model.pkl')
+        scaler = joblib.load('scaler.pkl')
+        metadata = joblib.load('model_metadata.pkl')
+        return lr_model, rf_model, scaler, metadata
     except Exception as e:
-        st.error(f"⚠️ Error loading models: {e}")
-        return None, None
-
-# Main app code
-st.set_page_config(page_title="Telco Churn Predictor", page_icon="📊", layout="wide")
+        st.error(f"❌ Error loading models: {str(e)}")
+        st.info("Please ensure all model files are in the repository root.")
+        return None, None, None, None
 
 # Load models
-lr_model, rf_model = load_model()
+lr_model, rf_model, scaler, metadata = load_models()
 
-if lr_model is None or rf_model is None:
+if lr_model is None:
     st.stop()
 
-# App header
-st.markdown('<p class="main-header">📱 Telco Customer Churn Prediction System</p>', unsafe_allow_html=True)
+# App title
+st.title("📊 Telco Customer Churn Prediction System")
 st.markdown("---")
 
-# Information about the project
-with st.expander("ℹ️ About This Application"):
-    st.markdown("""
-    ### Project Overview
-    This application predicts the likelihood of customer churn for a telecommunications company.
-    
-    **Developed by:** TS Academy Group 9  
-    **Track:** Classification  
-    **Dataset:** Telco Customer Churn (IBM)
-    
-    ### Model Performance
-    - **Balanced Logistic Regression**: F1-Score: 61.36%, Recall: 78.34%
-    - **Random Forest**: F1-Score: 62.56%, Accuracy: 78.28%
-    - **Cost-Optimized Threshold**: 0.29 (saves ~₦775,000 in retention costs)
-    
-    ### Key Insights
-    - Customers with **Month-to-month contracts** have higher churn rates
-    - **Fiber optic** users show increased churn
-    - **Electronic check** payment method correlates with higher churn
-    - **Longer tenure** (>38 months) significantly reduces churn risk
-    """)
-
-# Sidebar for inputs
+# Sidebar
 st.sidebar.header("📋 Customer Information")
 
 # Model selection
-model_choice = st.sidebar.selectbox(
+selected_model = st.sidebar.selectbox(
     "Select Prediction Model",
-    ["Balanced Logistic Regression (Recommended)", "Random Forest"],
-    help="The Balanced LR model is optimized for catching more potential churners"
+    ["Balanced Logistic Regression", "Balanced Random Forest"],
+    help="Choose which model to use for prediction"
 )
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Customer Details")
+st.sidebar.subheader("👤 Demographic Info")
 
-# Demographic Information
-with st.sidebar.expander("👤 Demographic Info", expanded=True):
-    gender = st.selectbox("Gender", ["Male", "Female"])
-    senior_citizen = st.selectbox("Senior Citizen", ["No", "Yes"])
-    partner = st.selectbox("Has Partner", ["No", "Yes"])
-    dependents = st.selectbox("Has Dependents", ["No", "Yes"])
+gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
+senior_citizen = st.sidebar.selectbox("Senior Citizen", ["No", "Yes"])
+partner = st.sidebar.selectbox("Has Partner", ["No", "Yes"])
+dependents = st.sidebar.selectbox("Has Dependents", ["No", "Yes"])
 
-# Account Information
-with st.sidebar.expander("💳 Account Info", expanded=True):
-    tenure = st.slider("Tenure (months)", 0, 72, 12, 
-                       help="How long the customer has been with the company")
-    contract = st.selectbox("Contract Type", 
-                           ["Month-to-month", "One year", "Two year"])
-    paperless_billing = st.selectbox("Paperless Billing", ["No", "Yes"])
-    payment_method = st.selectbox("Payment Method", 
-                                 ["Electronic check", "Mailed check", 
-                                  "Bank transfer (automatic)", 
-                                  "Credit card (automatic)"])
+st.sidebar.markdown("---")
+st.sidebar.subheader("📞 Service Details")
 
-# Service Information
-with st.sidebar.expander("📡 Service Details", expanded=True):
-    phone_service = st.selectbox("Phone Service", ["No", "Yes"])
-    multiple_lines = st.selectbox("Multiple Lines", 
-                                 ["No phone service", "No", "Yes"])
-    internet_service = st.selectbox("Internet Service", 
-                                   ["DSL", "Fiber optic", "No"])
-    
-    # Additional services (only shown if internet service exists)
-    if internet_service != "No":
-        online_security = st.selectbox("Online Security", ["No", "Yes"])
-        online_backup = st.selectbox("Online Backup", ["No", "Yes"])
-        device_protection = st.selectbox("Device Protection", ["No", "Yes"])
-        tech_support = st.selectbox("Tech Support", ["No", "Yes"])
-        streaming_tv = st.selectbox("Streaming TV", ["No", "Yes"])
-        streaming_movies = st.selectbox("Streaming Movies", ["No", "Yes"])
-    else:
-        online_security = "No internet service"
-        online_backup = "No internet service"
-        device_protection = "No internet service"
-        tech_support = "No internet service"
-        streaming_tv = "No internet service"
-        streaming_movies = "No internet service"
+phone_service = st.sidebar.selectbox("Phone Service", ["No", "Yes"])
+multiple_lines = st.sidebar.selectbox("Multiple Lines", ["No", "Yes", "No phone service"])
+internet_service = st.sidebar.selectbox("Internet Service", ["DSL", "Fiber optic", "No"])
+online_security = st.sidebar.selectbox("Online Security", ["No", "Yes", "No internet service"])
+online_backup = st.sidebar.selectbox("Online Backup", ["No", "Yes", "No internet service"])
+device_protection = st.sidebar.selectbox("Device Protection", ["No", "Yes", "No internet service"])
+tech_support = st.sidebar.selectbox("Tech Support", ["No", "Yes", "No internet service"])
+streaming_tv = st.sidebar.selectbox("Streaming TV", ["No", "Yes", "No internet service"])
+streaming_movies = st.sidebar.selectbox("Streaming Movies", ["No", "Yes", "No internet service"])
 
-# Billing Information
-with st.sidebar.expander("💰 Billing Info", expanded=True):
-    monthly_charges = st.number_input("Monthly Charges ($)", 
-                                     min_value=18.0, max_value=120.0, 
-                                     value=64.0, step=0.5)
-    total_charges = st.number_input("Total Charges ($)", 
-                                   min_value=0.0, max_value=10000.0, 
-                                   value=float(monthly_charges * tenure), 
-                                   step=10.0)
+st.sidebar.markdown("---")
+st.sidebar.subheader("💰 Billing Info")
 
-# Prediction button
-predict_button = st.sidebar.button("🔮 Predict Churn Risk", type="primary", use_container_width=True)
+contract = st.sidebar.selectbox("Contract", ["Month-to-month", "One year", "Two year"])
+paperless_billing = st.sidebar.selectbox("Paperless Billing", ["No", "Yes"])
+payment_method = st.sidebar.selectbox(
+    "Payment Method",
+    ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"]
+)
+
+tenure = st.sidebar.slider("Tenure (months)", 0, 72, 12)
+monthly_charges = st.sidebar.number_input("Monthly Charges ($)", 0.0, 200.0, 70.0, 0.01)
+total_charges = st.sidebar.number_input("Total Charges ($)", 0.0, 10000.0, 828.0, 0.01)
 
 # Main content area
-if predict_button and lr_model is not None:
-    # Create input dataframe
-    input_data = pd.DataFrame({
-        'gender': [gender],
-        'SeniorCitizen': [1 if senior_citizen == "Yes" else 0],
-        'Partner': [partner],
-        'Dependents': [dependents],
-        'tenure': [tenure],
-        'PhoneService': [phone_service],
-        'MultipleLines': [multiple_lines],
-        'InternetService': [internet_service],
-        'OnlineSecurity': [online_security],
-        'OnlineBackup': [online_backup],
-        'DeviceProtection': [device_protection],
-        'TechSupport': [tech_support],
-        'StreamingTV': [streaming_tv],
-        'StreamingMovies': [streaming_movies],
-        'Contract': [contract],
-        'PaperlessBilling': [paperless_billing],
-        'PaymentMethod': [payment_method],
-        'MonthlyCharges': [monthly_charges],
-        'TotalCharges': [total_charges]
-    })
-    
-    # Select model
-    selected_model = lr_model if "Logistic" in model_choice else rf_model
-    
-    # Make prediction
-    prediction = selected_model.predict(input_data)
-    prediction_proba = selected_model.predict_proba(input_data)
-    
-    # Use cost-optimized threshold for Logistic Regression
-    if "Logistic" in model_choice:
-        optimized_threshold = 0.29
-        optimized_prediction = (prediction_proba[:, 1] >= optimized_threshold).astype(int)
-    else:
-        optimized_threshold = 0.5
-        optimized_prediction = prediction
-    
-    churn_probability = prediction_proba[0][1] * 100
-    stay_probability = prediction_proba[0][0] * 100
-    
-    # Display results
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        # Prediction result
-        if optimized_prediction[0] == 1:
-            st.error("### ⚠️ HIGH CHURN RISK")
-            risk_level = "HIGH"
-            risk_color = "red"
-        else:
-            st.success("### ✅ LOW CHURN RISK")
-            risk_level = "LOW"
-            risk_color = "green"
-        
-        # Probability gauge
-        fig = go.Figure(go.Indicator(
-            mode = "gauge+number+delta",
-            value = churn_probability,
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Churn Probability", 'font': {'size': 24}},
-            delta = {'reference': 50, 'increasing': {'color': "red"}},
-            gauge = {
-                'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
-                'bar': {'color': risk_color},
-                'bgcolor': "white",
-                'borderwidth': 2,
-                'bordercolor': "gray",
-                'steps': [
-                    {'range': [0, 30], 'color': '#90EE90'},
-                    {'range': [30, 70], 'color': '#FFD700'},
-                    {'range': [70, 100], 'color': '#FFB6C1'}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': optimized_threshold * 100
-                }
-            }
-        ))
-        fig.update_layout(height=300, margin=dict(l=20, r=20, t=50, b=20))
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Detailed metrics
-    st.markdown("---")
-    st.subheader("📊 Detailed Analysis")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            label="Churn Probability",
-            value=f"{churn_probability:.1f}%",
-            delta=f"{churn_probability - 50:.1f}% vs avg"
-        )
-    
-    with col2:
-        st.metric(
-            label="Retention Probability",
-            value=f"{stay_probability:.1f}%",
-            delta=f"{stay_probability - 50:.1f}% vs avg"
-        )
-    
-    with col3:
-        st.metric(
-            label="Risk Level",
-            value=risk_level,
-            delta=None
-        )
-    
-    with col4:
-        st.metric(
-            label="Decision Threshold",
-            value=f"{optimized_threshold:.2f}",
-            delta="Optimized" if optimized_threshold != 0.5 else "Default"
-        )
-    
-    # Risk factors analysis
-    st.markdown("---")
-    st.subheader("🎯 Key Risk Factors")
-    
-    risk_factors = []
-    protective_factors = []
-    
-    # Analyze risk factors based on domain knowledge
-    if contract == "Month-to-month":
-        risk_factors.append("Month-to-month contract (high churn risk)")
-    else:
-        protective_factors.append(f"{contract} contract (lower churn risk)")
-    
-    if internet_service == "Fiber optic":
-        risk_factors.append("Fiber optic service (associated with higher churn)")
-    elif internet_service == "DSL":
-        protective_factors.append("DSL service (more stable)")
-    
-    if payment_method == "Electronic check":
-        risk_factors.append("Electronic check payment (high churn indicator)")
-    elif "automatic" in payment_method.lower():
-        protective_factors.append("Automatic payment (convenience factor)")
-    
-    if tenure < 12:
-        risk_factors.append(f"New customer (tenure: {tenure} months)")
-    elif tenure > 38:
-        protective_factors.append(f"Long-term customer (tenure: {tenure} months)")
-    
-    if monthly_charges > 70:
-        risk_factors.append(f"High monthly charges (${monthly_charges:.2f})")
-    
-    if tech_support == "Yes":
-        protective_factors.append("Has tech support subscription")
-    if online_security == "Yes":
-        protective_factors.append("Has online security subscription")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### ⚠️ Risk Factors")
-        if risk_factors:
-            for factor in risk_factors:
-                st.markdown(f"- 🔴 {factor}")
-        else:
-            st.markdown("- ✅ No major risk factors detected")
-    
-    with col2:
-        st.markdown("#### 🛡️ Protective Factors")
-        if protective_factors:
-            for factor in protective_factors:
-                st.markdown(f"- 🟢 {factor}")
-        else:
-            st.markdown("- ⚠️ No strong protective factors")
-    
-    # Recommendations
-    st.markdown("---")
-    st.subheader("💡 Retention Recommendations")
-    
-    if optimized_prediction[0] == 1:
-        st.warning("**Immediate Action Required:**")
-        recommendations = [
-            "📞 **Priority Contact**: Reach out within 48 hours with personalized retention offer",
-            "💰 **Discount Strategy**: Offer 15-20% discount on next 3 months",
-            "📝 **Contract Upgrade**: Incentivize upgrade to annual contract with added benefits",
-            "🎁 **Value-Add Services**: Provide free trial of premium services (Tech Support, Online Security)",
-            "📊 **Usage Review**: Schedule consultation to optimize service plan and reduce costs"
-        ]
-        
-        if payment_method == "Electronic check":
-            recommendations.append("💳 **Payment Method**: Encourage switch to automatic payment with 5% discount")
-        
-        if tenure < 12:
-            recommendations.append("🎯 **New Customer Program**: Enroll in loyalty program with milestone rewards")
-        
-        for rec in recommendations:
-            st.markdown(f"- {rec}")
-    else:
-        st.success("**Proactive Retention Strategy:**")
-        st.markdown("""
-        - 📧 **Regular Engagement**: Quarterly check-in to ensure satisfaction
-        - 🎁 **Loyalty Rewards**: Recognize tenure milestones with perks
-        - 📈 **Upsell Opportunities**: Introduce premium services when relevant
-        - 💬 **Feedback Collection**: Annual survey to maintain service quality
-        """)
-    
-    # Customer profile summary
-    st.markdown("---")
-    st.subheader("👤 Customer Profile Summary")
-    
-    profile_col1, profile_col2 = st.columns(2)
-    
-    with profile_col1:
-        st.markdown(f"""
-        **Demographics:**
-        - Gender: {gender}
-        - Senior Citizen: {senior_citizen}
-        - Partner: {partner}
-        - Dependents: {dependents}
-        
-        **Services:**
-        - Phone Service: {phone_service}
-        - Internet: {internet_service}
-        - Tech Support: {tech_support}
-        - Online Security: {online_security}
-        """)
-    
-    with profile_col2:
-        st.markdown(f"""
-        **Account:**
-        - Tenure: {tenure} months
-        - Contract: {contract}
-        - Payment Method: {payment_method}
-        
-        **Billing:**
-        - Monthly: ${monthly_charges:.2f}
-        - Total: ${total_charges:.2f}
-        - Avg/month: ${total_charges/max(tenure, 1):.2f}
-        """)
-    
-    # Download prediction report
-    st.markdown("---")
-    if st.button("📥 Download Prediction Report"):
-        report_data = {
-            'Timestamp': [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-            'Model': [model_choice],
-            'Churn_Probability': [f"{churn_probability:.2f}%"],
-            'Prediction': ["High Risk" if optimized_prediction[0] == 1 else "Low Risk"],
-            'Customer_Tenure': [tenure],
-            'Monthly_Charges': [monthly_charges],
-            'Contract_Type': [contract],
-            'Payment_Method': [payment_method],
-            'Internet_Service': [internet_service]
-        }
-        
-        report_df = pd.DataFrame(report_data)
-        csv = report_df.to_csv(index=False)
-        st.download_button(
-            label="Download CSV",
-            data=csv,
-            file_name=f"churn_prediction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv"
-        )
+col1, col2 = st.columns([2, 1])
 
-else:
-    # Welcome message when no prediction made
+with col1:
     st.info("""
-    ### Welcome to the Telco Churn Prediction System! 👋
-    
-    **How to use this app:**
+    ### How to use this app:
     1. Fill in customer information in the **sidebar** on the left
-    2. Click the **"Predict Churn Risk"** button
+    2. Click the **"Predict Churn Risk"** button below
     3. Review the prediction and recommendations
-    
-    **Model Information:**
-    - This app uses machine learning to predict customer churn risk
-    - Based on analysis of 7,043 customers with 73.5% accuracy
-    - Optimized to minimize revenue loss from customer churn
-    
-    **Need help?** Expand the "About This Application" section above for more details.
     """)
 
-# Footer
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #666; padding: 1rem;'>
-    <p>Developed by <strong>TS Academy Group 9</strong> | Classification Track | 2024</p>
-    <p>Model trained on IBM Telco Customer Churn Dataset</p>
-</div>
-""", unsafe_allow_html=True)
+with col2:
+    if st.button("🔮 Predict Churn Risk", type="primary", use_container_width=True):
+        # Prepare input data
+        input_data = {
+            'gender': gender,
+            'SeniorCitizen': 1 if senior_citizen == "Yes" else 0,
+            'Partner': partner,
+            'Dependents': dependents,
+            'tenure': tenure,
+            'PhoneService': phone_service,
+            'MultipleLines': multiple_lines,
+            'InternetService': internet_service,
+            'OnlineSecurity': online_security,
+            'OnlineBackup': online_backup,
+            'DeviceProtection': device_protection,
+            'TechSupport': tech_support,
+            'StreamingTV': streaming_tv,
+            'StreamingMovies': streaming_movies,
+            'Contract': contract,
+            'PaperlessBilling': paperless_billing,
+            'PaymentMethod': payment_method,
+            'MonthlyCharges': monthly_charges,
+            'TotalCharges': total_charges
+        }
+        
+        # Create DataFrame
+        input_df = pd.DataFrame([input_data])
+        
+        # Encode categorical variables
+        categorical_cols = input_df.select_dtypes(include=['object']).columns
+        for col in categorical_cols:
+            le = LabelEncoder()
+            # Fit on all possible values to avoid unseen labels
+            if col in ['gender']:
+                le.fit(['Male', 'Female'])
+            elif col in ['Partner', 'Dependents', 'PhoneService', 'PaperlessBilling']:
+                le.fit(['No', 'Yes'])
+            elif col == 'MultipleLines':
+                le.fit(['No', 'Yes', 'No phone service'])
+            elif col == 'InternetService':
+                le.fit(['DSL', 'Fiber optic', 'No'])
+            elif col in ['OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']:
+                le.fit(['No', 'Yes', 'No internet service'])
+            elif col == 'Contract':
+                le.fit(['Month-to-month', 'One year', 'Two year'])
+            elif col == 'PaymentMethod':
+                le.fit(['Electronic check', 'Mailed check', 'Bank transfer (automatic)', 'Credit card (automatic)'])
+            
+            input_df[col] = le.transform(input_df[col])
+        
+        # Scale features
+        input_scaled = scaler.transform(input_df)
+        
+        # Make prediction
+        model = lr_model if "Logistic" in selected_model else rf_model
+        prediction = model.predict(input_scaled)[0]
+        probability = model.predict_proba(input_scaled)[0]
+        
+        # Display results
+        st.markdown("---")
+        st.subheader("📈 Prediction Results")
+        
+        if prediction == 1:
+            st.error(f"⚠️ **HIGH RISK**: This customer is likely to churn")
+            st.metric("Churn Probability", f"{probability[1]:.1%}")
+        else:
+            st.success(f"✅ **LOW RISK**: This customer is likely to stay")
+            st.metric("Retention Probability", f"{probability[0]:.1%}")
+        
+        # Recommendations
+        st.markdown("---")
+        st.subheader("💡 Recommendations")
+        
+        if prediction == 1:
+            st.markdown("""
+            - **Offer retention incentives** (discounts, upgrades)
+            - **Improve customer service** engagement
+            - **Review contract terms** and pricing
+            - **Address service quality** issues
+            """)
+        else:
+            st.markdown("""
+            - **Maintain service quality**
+            - **Continue engagement** programs
+            - **Monitor satisfaction** regularly
+            """)
+
+# About section
+with st.expander("ℹ️ About This Application"):
+    st.markdown("""
+    This application uses machine learning to predict customer churn for a telecommunications company.
+    
+    **Models Used:**
+    - Balanced Logistic Regression
+    - Balanced Random Forest
+    
+    **Features:**
+    - Real-time predictions
+    - Risk assessment
+    - Actionable recommendations
+    """)

@@ -6,7 +6,7 @@ import os
 import streamlit as st
 import pandas as pd
 import numpy as np
-import pickle
+import joblib  # Changed from pickle
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
@@ -45,27 +45,40 @@ st.markdown("""
 @st.cache_resource
 
 def load_model():
+    """Load the trained models with proper error handling"""
     try:
-        # Get the directory where app.py is located
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        
-        # Go up one level to root, then into model folder
-        model_dir = os.path.join(os.path.dirname(base_dir), 'model')
+        # Get the correct path - models are in /model folder at root level
+        # app.py is in /telco-churn-app folder
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        model_dir = os.path.join(parent_dir, 'model')
         
         logistic_path = os.path.join(model_dir, 'logistic_model.pkl')
         rf_path = os.path.join(model_dir, 'rf_model.pkl')
         
-        with open(logistic_path, 'rb') as f:
-            model = pickle.load(f)
-        with open(rf_path, 'rb') as f:
-            rf_model = pickle.load(f)
-        return model, rf_model
-    except FileNotFoundError:
-        st.error("⚠️ Model files not found. Please run `python train_model.py` first to generate the models.")
+        # Load models using joblib
+        lr_model = joblib.load(logistic_path)
+        rf_model = joblib.load(rf_path)
+        
+        return lr_model, rf_model
+    
+    except FileNotFoundError as e:
+        st.error(f"⚠️ Model files not found: {e}")
+        st.info("Please ensure models are in the correct directory structure.")
         return None, None
+    
+    except Exception as e:
+        st.error(f"⚠️ Error loading models: {e}")
+        return None, None
+
+# Main app code
+st.set_page_config(page_title="Telco Churn Predictor", page_icon="📊", layout="wide")
 
 # Load models
 lr_model, rf_model = load_model()
+
+if lr_model is None or rf_model is None:
+    st.stop()
 
 # App header
 st.markdown('<p class="main-header">📱 Telco Customer Churn Prediction System</p>', unsafe_allow_html=True)

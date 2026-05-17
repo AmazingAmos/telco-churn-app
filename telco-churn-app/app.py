@@ -2,7 +2,7 @@
 Telco Customer Churn Prediction App
 Developed by TS Academy Group 9
 """
-
+import os
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -43,12 +43,21 @@ st.markdown("""
 
 # Load model and preprocessing pipeline
 @st.cache_resource
+
 def load_model():
-    """Load the trained model and preprocessing pipeline"""
     try:
-        with open('logistic_model.pkl', 'rb') as f:
+        # Get the directory where app.py is located
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Go up one level to root, then into model folder
+        model_dir = os.path.join(os.path.dirname(base_dir), 'model')
+        
+        logistic_path = os.path.join(model_dir, 'logistic_model.pkl')
+        rf_path = os.path.join(model_dir, 'rf_model.pkl')
+        
+        with open(logistic_path, 'rb') as f:
             model = pickle.load(f)
-        with open('rf_model.pkl', 'rb') as f:
+        with open(rf_path, 'rb') as f:
             rf_model = pickle.load(f)
         return model, rf_model
     except FileNotFoundError:

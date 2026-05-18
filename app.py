@@ -18,9 +18,8 @@ def load_models():
     try:
         lr_model = joblib.load('logistic_model.pkl')
         rf_model = joblib.load('rf_model.pkl')
-       # scaler = joblib.load('scaler.pkl')
         metadata = joblib.load('model_metadata.pkl')
-        return lr_model, rf_model, scaler, metadata
+        return lr_model, rf_model, metadata
     except Exception as e:
         st.error(f"❌ Error loading models: {str(e)}")
         st.info("Please ensure all model files are in the repository root.")
@@ -142,8 +141,6 @@ with col2:
             
             input_df[col] = le.transform(input_df[col])
         
-        # Scale features
-       # input_scaled = scaler.transform(input_df)
         
         # Make prediction
         model = lr_model if "Logistic" in selected_model else rf_model

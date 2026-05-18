@@ -24,7 +24,7 @@ def load_models():
     except Exception as e:
         st.error(f"❌ Error loading models: {str(e)}")
         st.info("Please ensure all model files are in the repository root.")
-        return None, None, None, None
+        return None, None, None
 
 # Load models
 lr_model, rf_model, metadata = load_models()

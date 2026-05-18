@@ -2,6 +2,6 @@ streamlit
 joblib
 pandas==2.2.2
 numpy==2.0.0
-scikit-learn
+scikit-learn==1.7.2
 imbalanced-learn==0.11.0
 # force rebuild

@@ -18,7 +18,7 @@ def load_models():
     try:
         lr_model = joblib.load('logistic_model.pkl')
         rf_model = joblib.load('rf_model.pkl')
-        scaler = joblib.load('scaler.pkl')
+       # scaler = joblib.load('scaler.pkl')
         metadata = joblib.load('model_metadata.pkl')
         return lr_model, rf_model, scaler, metadata
     except Exception as e:
@@ -27,7 +27,7 @@ def load_models():
         return None, None, None, None
 
 # Load models
-lr_model, rf_model, scaler, metadata = load_models()
+lr_model, rf_model, metadata = load_models()
 
 if lr_model is None:
     st.stop()
@@ -143,12 +143,12 @@ with col2:
             input_df[col] = le.transform(input_df[col])
         
         # Scale features
-        input_scaled = scaler.transform(input_df)
+       # input_scaled = scaler.transform(input_df)
         
         # Make prediction
         model = lr_model if "Logistic" in selected_model else rf_model
-        prediction = model.predict(input_scaled)[0]
-        probability = model.predict_proba(input_scaled)[0]
+        prediction = model.predict(input_df)[0]
+        probability = model.predict_proba(input_df)[0]
         
         # Display results
         st.markdown("---")

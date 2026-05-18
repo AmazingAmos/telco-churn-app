@@ -23,11 +23,11 @@ def load_models():
     except Exception as e:
         st.error(f"❌ Error loading models: {str(e)}")
         st.info("Please ensure all model files are in the repository root.")
+        # Only return 3 Nones here to fix the unpack error
         return None, None, None
 
-# Load models
+# Line 30: Unpack exactly 3 variables
 lr_model, rf_model, metadata = load_models()
-
 if lr_model is None:
     st.stop()
 
